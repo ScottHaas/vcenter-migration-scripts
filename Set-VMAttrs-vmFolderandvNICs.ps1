@@ -3,16 +3,44 @@
 Set Custom Attributes to VMs including vmFolder location and vNIC portgroup assignments. 
 Mostly used for migrations between vCenters.
 
+.DESCRIPTION
+This script creates several custom attributes against the VMs which are useful for exporting and importing into another vCenter if you happen
+to be migrating VMs between vCenters. This allows you to script out the reconnection of the vNICs to new DSwitches and move the VMs back into the same
+folders that they were in before migrations. vmFolder contains the folder path starting with the datacenter. VNIC# represents each VM's network device
+which then contains the network name string.
+
 .PARAMETER Server
-The hostname of the vCenter
+Specifies the vCenter FQDN
 
 .PARAMETER WhatIf
-What if option to dry run
+A switch that specifies the whatif flags. "$false" by default.
+
+.NOTES
+Author: Scott Haas
+Website: www.definebroken.com
+Credit: Utilized get-vmfolderpath from http://kunaludapi.blogspot.com  
+
+Changelog:
+18-May-2017
+ * Initial Script
+21-Aug-2017
+ * Adjusted script for public consumption on github
+
 
 .EXAMPLE
-PS> Set-VMAttrs-vmFolderandvNICs.ps1 -Server vcenter.domain.com -WhatIf
-#>
+Run a whatif scenario against vcenter.domain.com without setting anything.
 
+PS> Set-VMAttrs-vmFolderandvNICs.ps1 -Server vcenter.domain.com -WhatIf
+
+.EXAMPLE
+Set the vmFolder and vNIC# attributes for real.
+
+PS> Set-VMAttrs-vmFolderandvNICs.ps1 -Server vcenter.domain.com
+
+.LINK
+Reference: https://github.com/ScottHaas/vcenter-migration-scripts
+
+#>
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory=$true,HelpMessage="FQDN vCenter")]
@@ -92,14 +120,14 @@ foreach ($vm in $vms){
         $currvmFolderValue = ($vm|get-annotation -customattribute "vmFolder").Value
         if ($currvmFolderValue -ne $newvmFolderValue){
             #write-host "curr: $currvmFolderValue - new: $newvmFolderValue"
-            write-host "`nSetting $vm attribute vmFolder to $newvmFolderValue"
+            write-host "`nVM:$vm setting vmFolder: $newvmFolderValue"
             try{$null = set-annotation -entity $vm -CustomAttribute "vmFolder" -value $newvmFolderValue -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
         }
     } else {
-        write-host "`nCreating new attribute vmFolder"
+        write-host "`nCreating custom attribute: vmFolder"
         try{$null = New-CustomAttribute -targettype VirtualMachine -name "vmFolder" -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
         $currVMCustomAttNames += "vmFolder"
-        write-host "Setting $vm attribute vmFolder to $newvmFolderValue"
+        write-host "`nVM:$vm setting vmFolder: $newvmFolderValue"
         try{$null = set-annotation -entity $vm -CustomAttribute "vmFolder" -value $newvmFolderValue -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
     }
 
@@ -114,14 +142,14 @@ foreach ($vm in $vms){
             if ($currVMCustomAttNames|?{$_ -eq $networkvnic}){
                $currValue = ($vm|get-annotation -customattribute $networkvnic).value
                if ($currValue -ne $networkname){
-                    write-host "Setting $vm attribute $networkvnic to $networkname"
+                    write-host "VM:$vm setting $networkvnic`: $networkname"
                     try{$null = Set-Annotation -entity $vm -CustomAttribute $networkvnic -value $networkname -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
                }
             } else {
-                write-host "Creating new attribute $networkvnic"
+                write-host "`nCreating custom attribute: $networkvnic"
                 try{$null = New-CustomAttribute -targettype VirtualMachine -name $networkvnic -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
                 $currVMCustomAttNames += "$networkvnic"
-                write-host "Setting $vm attribute $networkvnic to $networkname"
+                write-host "`nVM:$vm setting $networkvnic`: $networkname"
                 try{$null = Set-Annotation -entity $vm -CustomAttribute $networkvnic -value $networkname -ErrorVariable Err -Whatif:$whatif}catch{write-host "Error: $Err"}
             }
         }
